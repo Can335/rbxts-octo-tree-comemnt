@@ -1,48 +1,48 @@
 --!strict
 
 export type Octree<T> = {
-	ClearAllNodes: (self: Octree<T>) -> (),
-	GetAllNodes: (self: Octree<T>) -> { Node<T> },
-	ForEachNode: (self: Octree<T>) -> () -> Node<T>?,
-	FindFirstNode: (self: Octree<T>, object: T) -> Node<T>?,
-	CountNodes: (self: Octree<T>) -> number,
-	CreateNode: (self: Octree<T>, position: Vector3, object: T) -> Node<T>,
-	RemoveNode: (self: Octree<T>, node: Node<T>) -> (),
-	ChangeNodePosition: (self: Octree<T>, node: Node<T>, position: Vector3) -> (),
-	SearchRadius: (self: Octree<T>, position: Vector3, radius: number) -> { Node<T> },
-	ForEachInRadius: (self: Octree<T>, position: Vector3, radius: number) -> () -> Node<T>?,
-	GetNearest: (self: Octree<T>, position: Vector3, radius: number, maxNodes: number?) -> { Node<T> },
+	ClearAllNodes: (self: Octree<T>) -> (), --clearing all the nodes from an octree which makes size == 0
+	GetAllNodes: (self: Octree<T>) -> { Node<T> }, -- Returns all nodes in an index pair table aka array
+	ForEachNode: (self: Octree<T>) -> () -> Node<T>?, --Operates instruction sets on each node.
+	FindFirstNode: (self: Octree<T>, object: T) -> Node<T>?, -- Find the edge aka. The first node
+	CountNodes: (self: Octree<T>) -> number, -- Counts the size of the octree aka the number of nodes existing
+	CreateNode: (self: Octree<T>, position: Vector3, object: T) -> Node<T>, -- Creates a Node
+	RemoveNode: (self: Octree<T>, node: Node<T>) -> (), -- Removes a Node
+	ChangeNodePosition: (self: Octree<T>, node: Node<T>, position: Vector3) -> (), --Changes the postion of a Node
+	SearchRadius: (self: Octree<T>, position: Vector3, radius: number) -> { Node<T> }, --searches for nodes in a specific radius in a 3 dimensional space
+	ForEachInRadius: (self: Octree<T>, position: Vector3, radius: number) -> () -> Node<T>?, --Operates instructions for specific in radius nodes in a 3 dimensional space
+	GetNearest: (self: Octree<T>, position: Vector3, radius: number, maxNodes: number?) -> { Node<T> }, --Gets the nearest nodes in radius in a 3d space
 }
 
 type OctreeInternal<T> = Octree<T> & {
 	Size: number,
-	Regions: { Region<T> },
+	Regions: { Region<T> },										--This contains run time information about the octree and bassically its attributes
 	_getRegion: (self: OctreeInternal<T>, maxLevel: number, position: Vector3) -> Region<T>,
 }
 
 type Region<T> = {
 	Center: Vector3,
 	Size: number,
-	Radius: number,
+	Radius: number,			--A specific region that contains nodes that connect to eachother. This shouldnt include anything after edges.
 	Regions: { Region<T> },
 	Parent: Region<T>?,
 	Level: number,
-	Nodes: { Node<T> }?,
+	Nodes: { Node<T> }?,		-- The nodes in this region, we can call this region because octants are used as divisions in eucludian geometry.
 }
 
 type Node<T> = {
-	Position: Vector3,
+	Position: Vector3,		--Represents a single Node in an Octree which contains generic Data.
 	Object: T,
 }
 
 type NodeInternal<T> = Node<T> & {
-	Region: Region<T>?,
+	Region: Region<T>?,		--This seems to refer to the region the Node is assigned to in a 3 dimensional space.
 }
 
-local MAX_SUB_REGIONS = 4
-local DEFAULT_TOP_REGION_SIZE = 512
+local MAX_SUB_REGIONS = 4 --This is the maximum divisions
+local DEFAULT_TOP_REGION_SIZE = 512 --allowed size of nodes within a region
 
-local function IsPointInBox(point: Vector3, boxCenter: Vector3, boxSize: number)
+local function IsPointInBox(point: Vector3, boxCenter: Vector3, boxSize: number) --Checks if a 3d point is in the radius of an M
 	local half = boxSize / 2
 	return point.X >= boxCenter.X - half
 		and point.X <= boxCenter.X + half
@@ -52,17 +52,17 @@ local function IsPointInBox(point: Vector3, boxCenter: Vector3, boxSize: number)
 		and point.Z <= boxCenter.Z + half
 end
 
-local function RoundTo(x: number, mult: number): number
+local function RoundTo(x: number, mult: number): number --Rounding a number
 	return math.round(x / mult) * mult
 end
 
-local function SwapRemove(tbl, index)
+local function SwapRemove(tbl, index) --Switches an index with a table size??? ->
 	local n = #tbl
 	tbl[index] = tbl[n]
 	tbl[n] = nil
 end
 
-local function CountNodesInRegion<T>(region: Region<T>)
+local function CountNodesInRegion<T>(region: Region<T>) -- counts nodes inside a region
 	local n = 0
 	if region.Nodes then
 		return #region.Nodes
@@ -74,7 +74,7 @@ local function CountNodesInRegion<T>(region: Region<T>)
 	return n
 end
 
-local function GetTopRegion<T>(octree, position: Vector3, create: boolean): Region<T>
+local function GetTopRegion<T>(octree, position: Vector3, create: boolean): Region<T> --this finds the upper region for sub regions.
 	local size = octree.Size
 	local origin = Vector3.new(RoundTo(position.X, size), RoundTo(position.Y, size), RoundTo(position.Z, size))
 	local region = octree.Regions[origin]
@@ -92,7 +92,7 @@ local function GetTopRegion<T>(octree, position: Vector3, create: boolean): Regi
 	return region
 end
 
-local function GetRegionsInRadius<T>(octree, position: Vector3, radius: number): { Region<T> }
+local function GetRegionsInRadius<T>(octree, position: Vector3, radius: number): { Region<T> } --Finds regions that have overlapping nodes into another region.
 	local regionsFound = {}
 	local function ScanRegions(regions: { Region<T> })
 		-- Find regions that have overlapping radius values
@@ -111,7 +111,7 @@ local function GetRegionsInRadius<T>(octree, position: Vector3, radius: number):
 	local size = octree.Size
 	local maxOffset = math.ceil(radius / size)
 	if radius < octree.Size then
-		-- Find all surrounding regions in a 3x3 cube:
+		--////////! Find all surrounding regions in a 3x3 cube:
 		for i = 0, 26 do
 			-- Get surrounding regions:
 			local x = i % 3 - 1
@@ -159,13 +159,13 @@ Octree.__index = Octree
 
 local function CreateOctree<T>(topRegionSize: number?): Octree<T>
 	local self = (setmetatable({}, Octree) :: unknown) :: OctreeInternal<T>
-	self.Size = if topRegionSize then topRegionSize else DEFAULT_TOP_REGION_SIZE
+	self.Size = if topRegionSize then topRegionSize else DEFAULT_TOP_REGION_SIZE --set size of octree
 	self.Regions = {} :: { Region<T> }
 	return self
 end
 
 function Octree:ClearAllNodes()
-	table.clear(self.Regions)
+	table.clear(self.Regions) --Clears all the regions and the nodes withhin
 end
 
 function Octree:GetAllNodes<T>(): { Node<T> }
@@ -174,7 +174,7 @@ function Octree:GetAllNodes<T>(): { Node<T> }
 		for _, region in regions do
 			local nodes = region.Nodes
 			if nodes then
-				table.move(nodes, 1, #nodes, #all + 1, all)
+				table.move(nodes, 1, #nodes, #all + 1, all) --Branches of to either getting the nodes or finding
 			else
 				GetNodes(region.Regions)
 			end
@@ -197,12 +197,11 @@ function Octree:ForEachNode<T>(): () -> Node<T>?
 			end
 		end
 	end
-	return coroutine.wrap(GetNodes)
-end
+	return coroutine.wrap(GetNodes) -- doesnt operate on nodes at all??????
 
 function Octree:FindFirstNode<T>(object: T): Node<T>?
 	for node: Node<T> in self:ForEachNode() do
-		if node.Object == object then
+		if node.Object == object then		-Finds the first node with the specified data
 			return node
 		end
 	end
@@ -210,14 +209,14 @@ function Octree:FindFirstNode<T>(object: T): Node<T>?
 end
 
 function Octree:CountNodes(): number
-	return #self:GetAllNodes()
+	return #self:GetAllNodes() --Counts all the nodes
 end
 
 function Octree:CreateNode<T>(position: Vector3, object: T): Node<T>
-	local region = (self :: OctreeInternal<T>):_getRegion(MAX_SUB_REGIONS, position)
+	local region = (self :: OctreeInternal<T>):_getRegion(MAX_SUB_REGIONS, position) --Revisit this syntax
 	local node: Node<T> = {
 		Region = region,
-		Position = position,
+		Position = position,	--create node
 		Object = object,
 	}
 	if region.Nodes then
@@ -238,7 +237,7 @@ function Octree:RemoveNode<T>(node: NodeInternal<T>)
 		SwapRemove(nodes, index)
 	end
 	if #nodes == 0 then
-		-- Remove regions without any nodes:
+		-- Remove regions without any nodes:				--Removes the node, revisit.
 		local region = node.Region
 		while region do
 			local parent = region.Parent
@@ -261,7 +260,7 @@ function Octree:ChangeNodePosition<T>(node: NodeInternal<T>, position: Vector3)
 	node.Position = position
 	local newRegion = self:_getRegion(MAX_SUB_REGIONS, position)
 	if newRegion == node.Region then
-		return
+		return							--Change node pos, revisit
 	end
 	table.insert(newRegion.Nodes, node)
 	self:RemoveNode(node)
@@ -274,7 +273,7 @@ function Octree:SearchRadius<T>(position: Vector3, radius: number): { Node<T> }
 	for _, region in ipairs(regions) do
 		if region.Nodes ~= nil then
 			for _, node: Node<T> in ipairs(region.Nodes) do
-				if (node.Position - position).Magnitude < radius then
+				if (node.Position - position).Magnitude < radius then  --Returns all the nodes in radius
 					table.insert(nodes, node)
 				end
 			end
@@ -302,7 +301,7 @@ function Octree:GetNearest<T>(position: Vector3, radius: number, maxNodes: numbe
 	local nodes = self:SearchRadius(position, radius)
 	table.sort(nodes, function(n0: Node<T>, n1: Node<T>)
 		local d0 = (n0.Position - position).Magnitude
-		local d1 = (n1.Position - position).Magnitude
+		local d1 = (n1.Position - position).Magnitude		--IMPORTANT, REVISIT
 		return d0 < d1
 	end)
 	if maxNodes ~= nil and #nodes > maxNodes then
